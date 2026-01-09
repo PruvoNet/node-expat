@@ -13,7 +13,8 @@
     "parsing"
   ],
   "scripts": {
-    "install": "node-gyp rebuild",
+    "install": "node-gyp-build",
+    "rebuild": "node-gyp rebuild",
     "preversion": "npm test",
     "lint": "standard",
     "unit": "vows --spec ./test/**/*.js",
@@ -21,7 +22,7 @@
     "benchmark": "node ./benchmark.js"
   },
   "dependencies": {
-    "bindings": "^1.5.0",
+    "node-gyp-build": "^4.8.4",
     "nan": "^2.19.0"
   },
   "devDependencies": {
