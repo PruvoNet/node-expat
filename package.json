@@ -23,7 +23,8 @@
   },
   "dependencies": {
     "node-gyp-build": "^4.8.4",
-    "nan": "^2.24.0"
+    "nan": "^2.25.0",
+    "node-gyp": "^12.2.0"
   },
   "devDependencies": {
     "benchmark": "^2.1.4",
