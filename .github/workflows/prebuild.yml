@@ -46,6 +46,10 @@ jobs:
             musl: true
           - id: win32-x64
             runner: windows-latest
+          # GitHub's native ARM64 Windows runner. Free on public repos; private
+          # repos may need "larger runners" enabled in org settings.
+          - id: win32-arm64
+            runner: windows-11-arm
 
     steps:
       - uses: actions/checkout@v5
