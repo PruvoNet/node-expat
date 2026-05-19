@@ -35,7 +35,7 @@
     "benchmark": "node ./benchmark.js"
   },
   "dependencies": {
-    "nan": "^2.25.0",
+    "nan": "^2.27.0",
     "node-gyp": "^12.2.0",
     "prebuild-install": "^7.1.3"
   },
