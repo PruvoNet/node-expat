@@ -7,6 +7,12 @@
 #   ./out/Debug/test
 
 {
+  # Same Node 26 / node-gyp 10 workaround as in ../../binding.gyp. gyp loads
+  # dependency .gyp files in their own variable scope, so the default has to
+  # live here too — the parent binding.gyp's variables don't propagate down.
+  'variables': {
+    'enable_thin_lto%': 'false',
+  },
   'target_defaults': {
     'default_configuration': 'Debug',
     'configurations': {
