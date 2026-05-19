@@ -19,7 +19,8 @@
     "lint": "standard",
     "unit": "vows --spec ./test/**/*.js",
     "test": "npm run unit && npm run lint",
-    "benchmark": "node ./benchmark.js"
+    "benchmark": "node ./benchmark.js",
+    "postinstall": "node scripts/install.js"
   },
   "dependencies": {
     "nan": "^2.25.0",
