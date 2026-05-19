@@ -1,6 +1,6 @@
 {
   "name": "node-expat",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "main": "./lib/node-expat",
   "gypfile": true,
   "description": "NodeJS binding for fast XML parsing.",

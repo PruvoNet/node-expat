@@ -3,7 +3,6 @@ name: prebuild
 on:
   push:
     branches: [master, main]
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -139,44 +138,45 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Gate the release on tag being reachable from master. If the tag was
-  # pushed from a feature branch (or any non-master commit), this job
-  # outputs on_master=false and the release job is skipped (not failed).
-  gate-release:
-    name: gate release on master ancestry
-    needs: prebuild
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    outputs:
-      on_master: ${{ steps.check.outputs.on_master }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - id: check
-        run: |
-          set -euo pipefail
-          git fetch origin master
-          if git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
-            echo "Tag $GITHUB_REF_NAME (commit $GITHUB_SHA) is on master — release will publish"
-            echo "on_master=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Tag $GITHUB_REF_NAME (commit $GITHUB_SHA) is NOT on master — release will be skipped"
-            echo "Merge your PR to master first, then re-tag the merge commit."
-            echo "on_master=false" >> "$GITHUB_OUTPUT"
-          fi
-
+  # Release flow: only fires on push to master, only after every matrix
+  # job succeeded, and only when the package.json version on the new
+  # commit does not yet have a matching `v<version>` tag on origin.
+  # That makes the release a function of "merged version bump to master"
+  # — no manual tagging required.
   release:
-    name: attach prebuilds to GitHub Release
-    needs: [prebuild, gate-release]
-    if: needs.gate-release.outputs.on_master == 'true'
+    name: auto-release on version bump
+    needs: prebuild
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
 
+      - name: Read version from package.json
+        id: version
+        run: |
+          set -euo pipefail
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "tag=v$v"   >> "$GITHUB_OUTPUT"
+          echo "Detected package version: $v (target tag: v$v)"
+
+      - name: Check whether tag already exists on origin
+        id: check_tag
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag already exists on origin — nothing to release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag does not exist yet — will create release."
+          fi
+
       - name: Download all prebuild artifacts
+        if: steps.check_tag.outputs.exists == 'false'
         uses: actions/download-artifact@v8
         with:
           pattern: prebuilds-*
@@ -184,14 +184,20 @@ jobs:
           merge-multiple: true
 
       - name: List downloaded assets
+        if: steps.check_tag.outputs.exists == 'false'
         run: ls -la artifacts/
 
-      - name: Create / update Release and upload assets
+      - name: Create tag and Release, upload assets
+        if: steps.check_tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          # Auto-uses the tag from github.ref. Idempotent: re-runs on the same
-          # tag will update the existing release and overwrite asset names
-          # that collide.
+          # softprops/action-gh-release creates the tag itself when given
+          # `tag_name` + `target_commitish`. It uses GITHUB_TOKEN, so the
+          # resulting tag push does NOT re-trigger this workflow (GH's
+          # rule: events from GITHUB_TOKEN don't cascade).
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.version.outputs.tag }}
           files: artifacts/*.tar.gz
           generate_release_notes: true
           fail_on_unmatched_files: true
