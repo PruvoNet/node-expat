@@ -1,0 +1,129 @@
+name: prebuild
+
+on:
+  push:
+    branches: [master, main, build-release]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+# Least-privilege default: matrix jobs only need to read the repo to clone.
+# The `release` job overrides this below with `contents: write` for upload.
+permissions:
+  contents: read
+
+# Node versions to produce prebuilds for. One .tar.gz per ABI per
+# (platform, arch, libc) combination is produced. On consumer install,
+# prebuild-install downloads only the asset matching the consumer's runtime.
+env:
+  NODE_TARGETS: "24.15.0 26.1.0"
+
+jobs:
+  prebuild:
+    name: ${{ matrix.id }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: darwin-x64
+            runner: macos-13
+          - id: darwin-arm64
+            runner: macos-14
+          - id: linux-x64-glibc
+            runner: ubuntu-latest
+          - id: linux-x64-musl
+            runner: ubuntu-latest
+            container: node:24-alpine
+          - id: linux-arm64-glibc
+            runner: ubuntu-24.04-arm
+          - id: linux-arm64-musl
+            runner: ubuntu-24.04-arm
+            container: node:24-alpine
+          - id: win32-x64
+            runner: windows-latest
+
+    container: ${{ matrix.container }}
+
+    steps:
+      - name: Install Alpine build deps
+        if: matrix.container == 'node:24-alpine'
+        run: apk add --no-cache bash python3 make g++ git tar
+
+      - uses: actions/checkout@v5
+
+      - name: Set up Node (non-container runners)
+        if: matrix.container == ''
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Install npm deps (no scripts so install hook can't fire)
+        run: npm ci --ignore-scripts
+
+      - name: Build prebuilds for all target ABIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=""
+          for v in $NODE_TARGETS; do
+            args="$args -t $v"
+          done
+          # --strip removes debug symbols. --tag-libc tags linux assets with
+          # glibc/musl so prebuild-install can request the right one on the
+          # consumer side.
+          npx prebuild $args --strip --tag-libc
+
+      - name: Verify each tarball contains a .node binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la prebuilds/
+          shopt -s nullglob
+          tarballs=(prebuilds/*.tar.gz)
+          if [ ${#tarballs[@]} -eq 0 ]; then
+            echo "ERROR: no prebuilds produced" >&2
+            exit 1
+          fi
+          for f in "${tarballs[@]}"; do
+            echo "--- $f ---"
+            tar -tzf "$f"
+            tar -tzf "$f" | grep -q '\.node$' || { echo "ERROR: no .node file in $f" >&2; exit 1; }
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds-${{ matrix.id }}
+          path: prebuilds/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: attach prebuilds to GitHub Release
+    needs: prebuild
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download all prebuild artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: prebuilds-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: List downloaded assets
+        run: ls -la artifacts/
+
+      - name: Create / update Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          # Auto-uses the tag from github.ref. Idempotent: re-runs on the same
+          # tag will update the existing release and overwrite asset names
+          # that collide.
+          files: artifacts/*.tar.gz
+          generate_release_notes: true
+          fail_on_unmatched_files: true

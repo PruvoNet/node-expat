@@ -1,6 +1,6 @@
 {
   "name": "node-expat",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "main": "./lib/node-expat",
   "gypfile": true,
   "description": "NodeJS binding for fast XML parsing.",
@@ -12,19 +12,32 @@
     "parse",
     "parsing"
   ],
+  "files": [
+    "lib",
+    "deps",
+    "binding.gyp",
+    "node-expat.cc",
+    "LICENSE",
+    "README.md"
+  ],
+  "binary": {
+    "module_name": "node_expat",
+    "host": "https://github.com",
+    "remote_path": "PruvoNet/node-expat/releases/download/v{version}"
+  },
   "scripts": {
-    "install": "node scripts/install.js",
+    "install": "prebuild-install || node-gyp rebuild",
     "rebuild": "node-gyp rebuild",
     "preversion": "npm test",
     "lint": "standard",
     "unit": "vows --spec ./test/**/*.js",
     "test": "npm run unit && npm run lint",
-    "benchmark": "node ./benchmark.js",
-    "postinstall": "node scripts/install.js"
+    "benchmark": "node ./benchmark.js"
   },
   "dependencies": {
     "nan": "^2.25.0",
-    "node-gyp": "^12.2.0"
+    "node-gyp": "^12.2.0",
+    "prebuild-install": "^7.1.3"
   },
   "devDependencies": {
     "benchmark": "^2.1.4",
@@ -32,13 +45,14 @@
     "iconv": "^3.0.1",
     "ltx": "^3.1.2",
     "node-xml": "^1.0.2",
+    "prebuild": "^13.0.1",
     "sax": "^1.4.4",
     "standard": "^17.1.2",
     "vows": "^0.8.3"
   },
-  "repository": "github:astro/node-expat",
+  "repository": "github:PruvoNet/node-expat",
   "homepage": "http://github.com/astro/node-expat",
-  "bugs": "https://github.com/astro/node-expat/issues",
+  "bugs": "https://github.com/PruvoNet/node-expat/issues",
   "author": {
     "name": "Astro",
     "email": "astro@spaceboyz.net",
