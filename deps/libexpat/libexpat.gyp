@@ -81,12 +81,5 @@
         ],
       },
     },
-
-    {
-      'target_name': 'version',
-      'type': 'executable',
-      'dependencies': [ 'expat' ],
-      'sources': [ 'version.c' ]
-    },
   ]
 }
