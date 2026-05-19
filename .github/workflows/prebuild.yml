@@ -26,8 +26,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # darwin-x64 is cross-compiled from a macos-14 (arm64) runner because
+          # macos-13 runners have very limited capacity. Apple Silicon clang
+          # produces x86_64 binaries natively when asked with --arch x64.
           - id: darwin-x64
-            runner: macos-13
+            runner: macos-14
+            arch: x64
           - id: darwin-arm64
             runner: macos-14
           - id: linux-x64-glibc
@@ -59,16 +63,30 @@ jobs:
       - name: Build prebuilds for all target ABIs (non-musl)
         if: ${{ !matrix.musl }}
         shell: bash
+        env:
+          MATRIX_ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
           args=""
           for v in $NODE_TARGETS; do
             args="$args -t $v"
           done
-          # --strip removes debug symbols. --tag-libc tags linux assets with
-          # glibc/musl so prebuild-install can request the right one on the
-          # consumer side.
-          npx prebuild $args --strip --tag-libc
+          # --tag-libc adds glibc/musl suffix on linux assets so prebuild-install
+          # can pick the right one on the consumer side. On other platforms it
+          # is a no-op.
+          args="$args --tag-libc"
+          # --strip relies on the binutils `strip` tool which isn't shipped on
+          # Windows runners. Skip it there; debug symbols stay in the .node
+          # binary, which is fine functionally (just larger).
+          if [ "${RUNNER_OS:-}" != "Windows" ]; then
+            args="$args --strip"
+          fi
+          # When MATRIX_ARCH is set (e.g. cross-compiling darwin-x64 from an
+          # arm64 runner), forward it to node-gyp via prebuild's --arch.
+          if [ -n "${MATRIX_ARCH:-}" ]; then
+            args="$args --arch $MATRIX_ARCH"
+          fi
+          npx prebuild $args
 
       # Musl path runs inside docker rather than using `container:`, because
       # GitHub Actions JavaScript actions can't run in Alpine containers on
@@ -110,7 +128,7 @@ jobs:
             tar -tzf "$f" | grep -q '\.node$' || { echo "ERROR: no .node file in $f" >&2; exit 1; }
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: prebuilds-${{ matrix.id }}
           path: prebuilds/*.tar.gz
@@ -155,7 +173,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Download all prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: prebuilds-*
           path: artifacts
