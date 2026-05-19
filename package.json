@@ -13,7 +13,7 @@
     "parsing"
   ],
   "scripts": {
-    "install": "node-gyp-build",
+    "install": "node scripts/install.js",
     "rebuild": "node-gyp rebuild",
     "preversion": "npm test",
     "lint": "standard",
@@ -22,7 +22,6 @@
     "benchmark": "node ./benchmark.js"
   },
   "dependencies": {
-    "node-gyp-build": "^4.8.4",
     "nan": "^2.25.0",
     "node-gyp": "^12.2.0"
   },
